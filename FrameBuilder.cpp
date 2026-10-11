@@ -12,6 +12,17 @@ bool FrameBuilder::addByte(uint8_t byte, uint32_t now, Frame& result) {
   if (count_ < Config::FrameSize) return false;
   result = Frame(bytes_);
   count_ = 0;
+  if (!result.isValid()) {
+    // A truncated packet may have swallowed the next header. Keep that
+    // suffix so the observer can recover without disturbing the relay.
+    for (size_t start = 1; start < Config::FrameSize; ++start) {
+      if (bytes_[start] != header_) continue;
+      count_ = Config::FrameSize - start;
+      for (size_t index = 0; index < count_; ++index) bytes_[index] = bytes_[start + index];
+      startedAt_ = now;
+      break;
+    }
+  }
   return true;
 }
 

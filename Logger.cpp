@@ -17,6 +17,7 @@ void Logger::logFrame(const Frame& frame) {
 
   Serial.printf("%s ->", frame.label());
   for (uint8_t byte : frame.bytes()) Serial.printf(" %02X", byte);
+  if (frame.kind() == Frame::Kind::Height) Serial.printf(" (%d cm)", frame.decodeHeight());
   Serial.println();
   last_[index] = frame;
   hasLast_[index] = true;

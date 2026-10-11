@@ -26,9 +26,10 @@ static void testStreamParsing() {
   for (uint8_t byte : bytes) parser.addByte(byte, 10, result);
   assert(result.bytes() == bytes);
 
-  const Frame::Bytes headerInPayload{{0xA5, 0xA5, 0, 0xFF, 0xFF}};
+  const Frame::Bytes headerInPayload{{0xA5, 0, 0x5A, 0xA5, 0xFF}};
   for (uint8_t byte : headerInPayload) parser.addByte(byte, 20, result);
   assert(result.bytes() == headerInPayload);
+  assert(result.isValid());
 
   parser.addByte(0xA5, 30, result);
   parser.addByte(0, 31, result);
@@ -42,8 +43,44 @@ static void testStreamParsing() {
   assert(!parser.isBuilding());
 }
 
+static void testProtocol() {
+  using Kind = Frame::Kind;
+  const uint8_t commands[] = {0, 1, 2, 4, 8, 0x10, 0x20, 0x40};
+  const Kind kinds[] = {Kind::Idle, Kind::Query, Kind::Preset1, Kind::Preset2,
+                        Kind::Preset3, Kind::Preset4, Kind::Up, Kind::Down};
+  for (size_t index = 0; index < sizeof(commands); ++index) {
+    Frame::Bytes bytes{{0xA5, 0, commands[index], uint8_t(0xFF - commands[index]), 0xFF}};
+    assert(Frame(bytes).isValid());
+    assert(Frame(bytes).kind() == kinds[index]);
+    bytes[3] ^= 1;
+    assert(!Frame(bytes).isValid());
+    assert(Frame(bytes).kind() == Kind::Unknown);
+    bytes[3] ^= 1;
+    bytes[4] = 0;
+    assert(!Frame(bytes).isValid());
+  }
+  const Frame height(Frame::Bytes{{0x5A, 0x06, 0x06, 0x6D, 0x79}});
+  assert(height.kind() == Kind::Height);
+  assert(height.decodeHeight() == 115);
+  assert(Frame(Frame::Bytes{{0x5A, 0, 0, 0, 0}}).isIdle());
+  assert(Frame(Frame::Bytes{{0x5A, 0x06, 0x06, 0x6D, 0x78}}).decodeHeight() == -1);
+  assert(Frame(Frame::Bytes{{0x5A, 0x06, 0x06, 0, 0x0C}}).decodeHeight() == -1);
+  assert(Frame().decodeHeight() == -1);
+
+  FrameBuilder parser(0xA5);
+  Frame result;
+  const uint8_t stream[] = {0xA5, 0, 0x20, 0xA5, 0, 0x40, 0xBF, 0xFF};
+  unsigned validFrames = 0;
+  for (uint8_t byte : stream) {
+    if (parser.addByte(byte, 0, result) && result.isValid()) ++validFrames;
+  }
+  assert(validFrames == 1);
+  assert(result.kind() == Kind::Down);
+}
+
 int main() {
   testFrames();
   testStreamParsing();
-  puts("Frame and stream tests passed");
+  testProtocol();
+  puts("Frame, stream and protocol tests passed");
 }
