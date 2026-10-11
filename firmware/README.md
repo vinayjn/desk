@@ -1,7 +1,7 @@
 # Standing desk
 
 ESP32-C3 Super Mini firmware that connects a standing desk keypad to its motor
-controller. It relays keypad traffic, reads the current height, and accepts
+controller. It relays keypad commands, reads the current height, and accepts
 height targets over Bluetooth or USB.
 
 Automatic moves wait for fresh height feedback, then stop at the target.
@@ -11,14 +11,21 @@ timing limits are configured in `Config.h`.
 
 ## Wiring
 
-Both UART links use 9600 baud, 8N1. RX/TX labels refer to the ESP32.
+Both UARTs use 9600 baud, 8N1. The keypad UART receives only; controller
+replies reach the keypad directly.
+
+![Keypad, ESP32 and motor-controller wiring](pinout.svg)
 
 | Connection | ESP32 GPIO |
 | --- | --- |
 | Keypad TX → ESP32 RX | 1 |
-| ESP32 TX → keypad RX | 3 |
-| Controller TX → ESP32 RX | 4 |
-| ESP32 TX → controller RX | 0 |
+| Controller TX → ESP32 RX **and keypad black/RX** | 6 |
+| ESP32 TX → controller RX | 7 |
+
+Keypad colours are red TX, black RX, yellow VCC and white GND.
+On the standard Super Mini layout, GPIO1 and GPIO6/7 are on opposite edges.
+Place the board across the breadboard's centre gap; A–E and F–J are separate
+groups within each numbered row. [Config.h](Config.h) defines pin assignments.
 
 The ESP32 shares the desk cable's VCC and ground. Debug output uses native USB.
 

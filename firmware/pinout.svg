@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="500" viewBox="0 0 1100 500" role="img" aria-labelledby="title desc">
+  <title id="title">Desk wiring</title>
+  <desc id="desc">Keypad TX connects to ESP32 GPIO1. GPIO7 connects to controller RX. Controller TX connects to both GPIO6 and keypad RX. VCC and GND are shared.</desc>
+  <defs>
+    <marker id="red" markerWidth="12" markerHeight="12" refX="12" refY="6" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 6 L0 12 Z" fill="#c93838"/></marker>
+    <marker id="black" markerWidth="12" markerHeight="12" refX="12" refY="6" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 6 L0 12 Z" fill="#27313b"/></marker>
+  </defs>
+  <rect width="1100" height="500" fill="white"/>
+  <g font-family="Arial, sans-serif" font-size="19" fill="#27313b">
+    <text x="550" y="42" text-anchor="middle" font-size="25">Desk wiring</text>
+    <path d="M150 96 H950 M150 96 V140 M550 96 V140 M950 96 V140" stroke="#ba8500" stroke-width="3" fill="none"/>
+    <text x="550" y="84" text-anchor="middle">VCC · yellow</text>
+    <g fill="white" stroke="#27313b" stroke-width="2">
+      <rect x="40" y="140" width="220" height="180"/>
+      <rect x="420" y="140" width="260" height="180"/>
+      <rect x="840" y="140" width="220" height="180"/>
+    </g>
+    <g font-size="23" text-anchor="middle">
+      <text x="150" y="179">Keypad</text>
+      <text x="550" y="179">ESP32</text>
+      <text x="950" y="179">Controller</text>
+    </g>
+    <text x="242" y="224" text-anchor="end">TX</text>
+    <text x="242" y="294" text-anchor="end">RX</text>
+    <text x="438" y="224">GPIO1 · RX</text>
+    <text x="662" y="224" text-anchor="end">GPIO7 · TX</text>
+    <text x="662" y="294" text-anchor="end">GPIO6 · RX</text>
+    <text x="858" y="224">RX</text>
+    <text x="858" y="294">TX</text>
+    <path d="M260 232 H420" stroke="#c93838" stroke-width="3" fill="none" marker-end="url(#red)"/>
+    <path d="M680 232 H840" stroke="#c93838" stroke-width="3" fill="none" marker-end="url(#red)"/>
+    <path d="M840 302 H680" stroke="#27313b" stroke-width="3" fill="none" marker-end="url(#black)"/>
+    <g font-size="16" text-anchor="middle">
+      <text x="340" y="220" fill="#a52d2d">Red</text>
+      <text x="760" y="220" fill="#a52d2d">Red</text>
+      <text x="760" y="288">Black</text>
+    </g>
+    <path d="M150 320 V430 M550 320 V430 M950 320 V430 M150 430 H950" stroke="#87939e" stroke-width="3" stroke-dasharray="6 5" fill="none"/>
+    <path d="M760 302 V367 H340 V302 H260" stroke="white" stroke-width="9" fill="none"/>
+    <path d="M760 302 V367 H340 V302 H260" stroke="#27313b" stroke-width="3" fill="none" marker-end="url(#black)"/>
+    <circle cx="760" cy="302" r="5" fill="#27313b"/>
+    <text x="550" y="463" text-anchor="middle">GND · white</text>
+  </g>
+</svg>

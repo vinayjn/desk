@@ -10,7 +10,6 @@ public:
   int readController();
   void sendToController(uint8_t byte);
   void sendToController(const Frame& frame);
-  void sendToKeypad(uint8_t byte);
 
 private:
   HardwareSerial keypad{1};

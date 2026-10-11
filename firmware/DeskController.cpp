@@ -37,7 +37,6 @@ void DeskController::loop() {
   for (unsigned count = 0; count < Config::BytesPerLoop; ++count) {
     int byte = proxy.readController();
     if (byte < 0) break;
-    proxy.sendToKeypad(static_cast<uint8_t>(byte));
     if (controllerFrames.addByte(static_cast<uint8_t>(byte), millis(), frame)) {
       logger.logFrame(frame);
       onControllerFrame(frame, millis());

@@ -9,9 +9,8 @@ constexpr uint32_t DeskBaud = 9600;
 
 // RX/TX are named from the ESP32's perspective.
 constexpr int KeypadRxPin = 1;
-constexpr int KeypadTxPin = 3;
-constexpr int ControllerRxPin = 4;
-constexpr int ControllerTxPin = 0;
+constexpr int ControllerRxPin = 6;
+constexpr int ControllerTxPin = 7;
 constexpr unsigned BytesPerLoop = 64;
 constexpr size_t FrameSize = 5;
 constexpr uint8_t KeypadHeader = 0xA5;

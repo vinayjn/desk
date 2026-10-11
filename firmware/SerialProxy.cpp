@@ -9,8 +9,9 @@
 #endif
 
 void SerialProxy::begin() {
-  keypad.begin(Config::DeskBaud, SERIAL_8N1,
-               Config::KeypadRxPin, Config::KeypadTxPin);
+  keypad.end();
+  // Controller replies reach keypad RX directly; this UART only receives.
+  keypad.begin(Config::DeskBaud, SERIAL_8N1, Config::KeypadRxPin, -1);
   controller.begin(Config::DeskBaud, SERIAL_8N1,
                    Config::ControllerRxPin, Config::ControllerTxPin);
 }
@@ -21,4 +22,3 @@ void SerialProxy::sendToController(uint8_t byte) { controller.write(byte); }
 void SerialProxy::sendToController(const Frame& frame) {
   controller.write(frame.bytes().data(), frame.bytes().size());
 }
-void SerialProxy::sendToKeypad(uint8_t byte) { keypad.write(byte); }
