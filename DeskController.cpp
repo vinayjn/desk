@@ -48,7 +48,7 @@ void DeskController::loop() {
       uint32_t(millis() - startedAt_) >= Config::StartupQueryDelayMs) {
     const bool wasMoving = state.isMoving();
     if (state.startMove(requestedTarget_, millis())) {
-      proxy.sendToController(Frame::queryCommand());
+      queryHeight();
       queryRequested_ = false;
     } else if (wasMoving) {
       proxy.sendToController(Frame::idleCommand());
@@ -57,7 +57,7 @@ void DeskController::loop() {
   }
   if (queryRequested_ && !keypadFrames.isBuilding() &&
       uint32_t(millis() - startedAt_) >= Config::StartupQueryDelayMs) {
-    proxy.sendToController(Frame::queryCommand());
+    queryHeight();
     queryRequested_ = false;
   }
   updateMovement(millis());
@@ -116,6 +116,16 @@ void DeskController::updateMovement(uint32_t now) {
     case DeskState::Action::Idle: proxy.sendToController(Frame::idleCommand()); break;
     case DeskState::Action::None: break;
   }
+  if (state.isWaitingForHeight() && !keypadFrames.isBuilding() &&
+      uint32_t(now - lastHeightQueryAt_) >= Config::HeightQueryRetryIntervalMs) {
+    queryHeight();
+    if (Serial) Serial.println("Retrying initial height query");
+  }
+}
+
+void DeskController::queryHeight() {
+  proxy.sendToController(Frame::queryCommand());
+  lastHeightQueryAt_ = millis();
 }
 
 void DeskController::readSerialCommands() {

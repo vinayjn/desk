@@ -49,7 +49,7 @@ void DeskState::cancelMove() {
 DeskState::Action DeskState::tick(uint32_t now) {
   if (!isMoving()) return Action::None;
   const bool feedbackMissing = waitingForHeight_
-    ? uint32_t(now - moveStartedAt_) >= Config::HeightTimeoutMs
+    ? uint32_t(now - moveStartedAt_) >= Config::InitialHeightTimeoutMs
     : uint32_t(now - lastHeightAt_) >= Config::HeightTimeoutMs;
   if (feedbackMissing) return failMove(ErrorReason::FeedbackTimeout);
   if (waitingForHeight_) return Action::None;

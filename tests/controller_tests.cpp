@@ -291,6 +291,139 @@ static void testLongBluetoothMove() {
   assert(status->getValue() == "IDLE");
 }
 
+static void testFirstMoveAfterIdle() {
+  reset();
+  DeskController desk;
+  desk.begin();
+  fakeNow = 100;
+  desk.loop();
+  fakeBleServer.connect();
+  desk.loop();
+  feed(0, height(85));
+  desk.loop();
+  auto* target = fakeBleServer.service.find(Config::BleTargetUuid);
+  auto* status = fakeBleServer.service.find(Config::BleStatusUuid);
+
+  fakeNow = 60000;
+  fakeUarts[0].output.clear();
+  target->writeFromClient(String(1, char(100)));
+  desk.loop();
+  assert(fakeUarts[0].output == bytes(Frame::queryCommand()));
+  assert(status->getValue() == "MOVING");
+  fakeUarts[0].output.clear();
+  fakeNow += 500;
+  desk.loop();
+  assert(fakeUarts[0].output == bytes(Frame::queryCommand()));
+  fakeUarts[0].output.clear();
+
+  fakeNow += 500;
+  desk.loop();
+  assert(fakeUarts[0].output == bytes(Frame::queryCommand()));
+  assert(status->getValue() == "MOVING");
+  fakeUarts[0].output.clear();
+  fakeNow += 500;
+  desk.loop();
+  assert(fakeUarts[0].output == bytes(Frame::queryCommand()));
+  assert(status->getValue() == "MOVING");
+  fakeUarts[0].output.clear();
+  feed(0, height(85));
+  desk.loop();
+  assert(fakeUarts[0].output == bytes(Frame::upCommand()));
+  assert(status->getValue() == "MOVING");
+  fakeNow += 100;
+  feed(0, height(100));
+  desk.loop();
+  assert(status->getValue() == "IDLE");
+}
+
+static void testInitialHeightTimeout() {
+  reset();
+  DeskController desk;
+  desk.begin();
+  fakeNow = 100;
+  desk.loop();
+  fakeBleServer.connect();
+  desk.loop();
+  feed(0, height(85));
+  desk.loop();
+  auto* target = fakeBleServer.service.find(Config::BleTargetUuid);
+  auto* status = fakeBleServer.service.find(Config::BleStatusUuid);
+  target->writeFromClient(String(1, char(100)));
+  desk.loop();
+  const uint32_t started = fakeNow;
+  for (uint32_t elapsed = 500; elapsed < 2500; elapsed += 500) {
+    fakeNow = started + elapsed;
+    fakeUarts[0].output.clear();
+
+    auto invalid = height(85).bytes();
+    invalid[4] ^= 1;
+    feed(0, Frame(invalid));
+    desk.loop();
+    assert(fakeUarts[0].output == bytes(Frame::queryCommand()));
+    assert(status->getValue() == "MOVING");
+  }
+  fakeNow = started + 2500;
+  fakeUarts[0].output.clear();
+  desk.loop();
+  assert(fakeUarts[0].output == bytes(Frame::idleCommand()));
+  assert(status->getValue() == "ERROR");
+  assert(Serial.output.find("height feedback timed out") != std::string::npos);
+  fakeUarts[0].output.clear();
+  feed(0, height(85));
+  desk.loop();
+  assert(fakeUarts[0].output.empty());
+  assert(status->getValue() == "ERROR");
+}
+
+static void testInitialQueryBoundaryAndCancellation() {
+  reset();
+  DeskController desk;
+  desk.begin();
+  fakeNow = 100;
+  desk.loop();
+  fakeBleServer.connect();
+  desk.loop();
+  auto* target = fakeBleServer.service.find(Config::BleTargetUuid);
+  auto* status = fakeBleServer.service.find(Config::BleStatusUuid);
+  target->writeFromClient(String(1, char(100)));
+  desk.loop();
+  fakeUarts[0].output.clear();
+  fakeNow += 500;
+  fakeUarts[1].input.push_back(0xA5);
+  fakeUarts[1].input.push_back(0);
+  desk.loop();
+  assert(fakeUarts[0].output.empty());
+  for (size_t index = 2; index < 5; ++index) {
+    fakeUarts[1].input.push_back(Frame::idleCommand().bytes()[index]);
+  }
+  desk.loop();
+  assert(fakeUarts[0].output == bytes(Frame::queryCommand()));
+  fakeUarts[0].output.clear();
+  fakeNow += 500;
+  feed(1, Frame::downCommand());
+  desk.loop();
+  auto expected = bytes(Frame::idleCommand());
+  const auto down = bytes(Frame::downCommand());
+  expected.insert(expected.end(), down.begin(), down.end());
+  assert(fakeUarts[0].output == expected);
+  assert(status->getValue() == "IDLE");
+  fakeUarts[0].output.clear();
+  fakeNow += 500;
+  desk.loop();
+  assert(fakeUarts[0].output.empty());
+
+  target->writeFromClient(String(1, char(100)));
+  desk.loop();
+  fakeUarts[0].output.clear();
+  fakeBleServer.disconnect();
+  desk.loop();
+  assert(fakeUarts[0].output == bytes(Frame::idleCommand()));
+  fakeUarts[0].output.clear();
+  fakeNow += 500;
+  desk.loop();
+  assert(fakeUarts[0].output.empty());
+}
+
 int main() {
   testRelayAndLogging();
   testInjectionBoundary();
@@ -300,5 +433,8 @@ int main() {
   testPendingTargetCancellation();
   testBluetooth();
   testLongBluetoothMove();
+  testFirstMoveAfterIdle();
+  testInitialHeightTimeout();
+  testInitialQueryBoundaryAndCancellation();
   puts("Controller routing, logging, cancellation, USB and Bluetooth tests passed");
 }

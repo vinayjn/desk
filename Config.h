@@ -27,6 +27,9 @@ constexpr uint32_t MoveCommandIntervalMs = 100;
 
 constexpr uint32_t MoveTimeoutMs = 60000;
 constexpr uint32_t MoveProgressTimeoutMs = 10000;
+
+constexpr uint32_t InitialHeightTimeoutMs = 2500;
+constexpr uint32_t HeightQueryRetryIntervalMs = 500;
 constexpr uint32_t HeightTimeoutMs = 1000;
 constexpr const char* BleDeviceName = "Standing Desk";
 constexpr const char* BleServiceUuid = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";

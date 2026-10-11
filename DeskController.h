@@ -22,6 +22,7 @@ private:
   BLEInterface ble;
   bool queryRequested_ = true;
   uint32_t startedAt_ = 0;
+  uint32_t lastHeightQueryAt_ = 0;
   bool moveRequested_ = false;
   int requestedTarget_ = 0;
   bool keypadPacketBlocked_ = false;
@@ -34,4 +35,5 @@ private:
   void onControllerFrame(const Frame& frame, uint32_t now);
   void readSerialCommands();
   void updateMovement(uint32_t now);
+  void queryHeight();
 };

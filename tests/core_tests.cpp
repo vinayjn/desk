@@ -126,8 +126,8 @@ static void testMovement() {
   assert(state.tick(400) == Action::None);
 
   assert(state.startMove(100, 500));
-  assert(state.tick(1499) == Action::None);
-  assert(state.tick(1500) == Action::Idle);
+  assert(state.tick(500 + Config::InitialHeightTimeoutMs - 1) == Action::None);
+  assert(state.tick(500 + Config::InitialHeightTimeoutMs) == Action::Idle);
   assert(state.status() == Status::Error);
   assert(state.errorReason() == DeskState::ErrorReason::FeedbackTimeout);
 

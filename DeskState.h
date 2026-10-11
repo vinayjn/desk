@@ -13,6 +13,7 @@ public:
   Status status() const { return status_; }
   ErrorReason errorReason() const { return errorReason_; }
   bool isMoving() const { return status_ == Status::Moving; }
+  bool isWaitingForHeight() const { return isMoving() && waitingForHeight_; }
   bool updateHeight(int height, uint32_t now);
   bool startMove(int target, uint32_t now);
   void cancelMove();
