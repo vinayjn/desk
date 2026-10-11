@@ -4,6 +4,7 @@
 #include "FrameBuilder.h"
 #include "Logger.h"
 #include "DeskState.h"
+#include "BLEInterface.h"
 
 class DeskController {
 public:
@@ -18,6 +19,7 @@ private:
   FrameBuilder controllerFrames{Config::ControllerHeader};
   Logger logger;
   DeskState state;
+  BLEInterface ble;
   bool queryRequested_ = true;
   uint32_t startedAt_ = 0;
   bool moveRequested_ = false;

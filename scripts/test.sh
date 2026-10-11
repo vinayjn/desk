@@ -18,6 +18,7 @@ trap 'rm -rf "$test_dir"' EXIT
   -I "$project_root/tests/fakes" -I "$project_root" \
   "$project_root/tests/controller_tests.cpp" "$project_root/DeskController.cpp" \
   "$project_root/SerialProxy.cpp" "$project_root/Logger.cpp" \
+  "$project_root/BLEInterface.cpp" \
   "$project_root/Frame.cpp" "$project_root/FrameBuilder.cpp" "$project_root/DeskState.cpp" \
   -o "$test_dir/controller_tests"
 "$test_dir/controller_tests"

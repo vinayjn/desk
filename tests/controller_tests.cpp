@@ -5,6 +5,8 @@
 uint32_t fakeNow = 0;
 FakeSerial Serial;
 FakeUart fakeUarts[2];
+BLEServer fakeBleServer;
+BLEAdvertising fakeAdvertising;
 
 static void reset() {
   fakeNow = 0;
@@ -144,11 +146,91 @@ static void testSerialInput() {
   assert(fakeUarts[0].output == bytes(Frame::idleCommand()));
 }
 
+static void testPendingTargetCancellation() {
+  reset();
+  DeskController desk;
+  desk.begin();
+  fakeNow = 100;
+  desk.loop();
+  fakeUarts[0].output.clear();
+  desk.requestMove(100);
+  feed(1, Frame::downCommand());
+  desk.loop();
+  assert(fakeUarts[0].output == bytes(Frame::downCommand()));
+  feed(0, height(90)); desk.loop();
+  assert(fakeUarts[0].output == bytes(Frame::downCommand()));
+}
+
+static void testBluetooth() {
+  reset();
+  DeskController desk;
+  desk.begin();
+  fakeNow = 100;
+  desk.loop();
+  auto* current = fakeBleServer.service.find(Config::BleHeightUuid);
+  auto* target = fakeBleServer.service.find(Config::BleTargetUuid);
+  auto* status = fakeBleServer.service.find(Config::BleStatusUuid);
+  assert(current->getValue() == String(1, '\0'));
+  assert(status->getValue() == "IDLE");
+
+  fakeBleServer.connect();
+  desk.loop();
+  fakeUarts[0].output.clear();
+  target->writeFromClient(String(1, char(100)));
+  assert(fakeUarts[0].output.empty());
+  assert(status->getValue() == "IDLE");
+  desk.loop();
+  assert(fakeUarts[0].output == bytes(Frame::queryCommand()));
+  assert(status->getValue() == "MOVING");
+  fakeUarts[0].output.clear();
+  feed(0, height(90)); desk.loop();
+  assert(fakeUarts[0].output == bytes(Frame::upCommand()));
+  assert(current->getValue() == String(1, char(90)));
+
+  fakeUarts[0].output.clear();
+  target->writeFromClient("100");
+  desk.loop();
+  assert(fakeUarts[0].output == bytes(Frame::idleCommand()));
+  assert(status->getValue() == "ERROR");
+  fakeUarts[0].output.clear();
+  target->writeFromClient(String()); desk.loop();
+  assert(fakeUarts[0].output.empty());
+  assert(status->getValue() == "ERROR");
+
+  target->writeFromClient(String(1, char(100))); desk.loop();
+  feed(0, height(100)); desk.loop();
+  assert(status->getValue() == "IDLE");
+  assert(current->getValue() == String(1, char(100)));
+  const unsigned heightNotifications = current->notifications;
+  const unsigned statusNotifications = status->notifications;
+  desk.loop();
+  assert(current->notifications == heightNotifications);
+  assert(status->notifications == statusNotifications);
+
+  target->writeFromClient(String(1, char(90)));
+  target->writeFromClient(String(1, char(100)));
+  desk.loop();
+  fakeUarts[0].output.clear();
+  feed(0, height(95)); desk.loop();
+  assert(fakeUarts[0].output == bytes(Frame::upCommand()));
+
+  fakeUarts[0].output.clear();
+  target->writeFromClient(String(1, char(110)));
+  fakeBleServer.disconnect();
+  assert(fakeUarts[0].output.empty());
+  desk.loop();
+  assert(fakeUarts[0].output == bytes(Frame::idleCommand()));
+  assert(status->getValue() == "IDLE");
+  assert(fakeAdvertising.starts == 2);
+}
+
 int main() {
   testRelayAndLogging();
   testInjectionBoundary();
   testPhysicalCancellation();
   testStopInsideBlockedPacket();
   testSerialInput();
-  puts("Controller routing, logging, cancellation and USB command tests passed");
+  testPendingTargetCancellation();
+  testBluetooth();
+  puts("Controller routing, logging, cancellation, USB and Bluetooth tests passed");
 }

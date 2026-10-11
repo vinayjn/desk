@@ -25,4 +25,9 @@ constexpr uint32_t StartupQueryDelayMs = 100;
 constexpr uint32_t MoveCommandIntervalMs = 100;
 constexpr uint32_t MoveTimeoutMs = 10000;
 constexpr uint32_t HeightTimeoutMs = 1000;
+constexpr const char* BleDeviceName = "Standing Desk";
+constexpr const char* BleServiceUuid = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+constexpr const char* BleHeightUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+constexpr const char* BleTargetUuid = "1c95d5e3-d8f7-413a-bf3d-7a2e5d7be87e";
+constexpr const char* BleStatusUuid = "9a8ca5fa-7d85-4e8e-9e3a-6c8d3f2b1e4d";
 }

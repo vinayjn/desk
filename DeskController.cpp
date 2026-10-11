@@ -7,10 +7,16 @@ void DeskController::begin() {
   Serial.begin(Config::DebugBaud);
   proxy.begin();
   startedAt_ = millis();
+  ble.begin();
   Serial.println("Desk ready: enter height in cm, q to query, or s to stop (newline)");
 }
 
 void DeskController::loop() {
+  ble.poll();
+  if (ble.takeStopRequest()) stopMove();
+  if (ble.takeQueryRequest()) queryRequested_ = true;
+  const int bleTarget = ble.takeTarget();
+  if (bleTarget >= 0) requestMove(bleTarget);
   const uint32_t now = millis();
   keypadFrames.expire(now);
   controllerFrames.expire(now);
@@ -59,15 +65,22 @@ void DeskController::loop() {
     lastReportedStatus_ = state.status();
     if (Serial) Serial.printf("Status: %s\n", DeskState::statusName(state.status()));
   }
+  ble.publish(state.currentHeight(), state.status());
 }
 
 void DeskController::onKeypadFrame(const Frame& frame) {
-  if (!keypadPacketBlocked_ || !frame.isValid() || frame.isIdle() ||
+  if (!frame.isValid() || frame.isIdle() ||
       frame.kind() == Frame::Kind::Query) return;
   // The physical keypad wins. Replay its whole packet after stopping the
   // automatic move, including a packet that began just before a timeout.
-  stopMove();
-  proxy.sendToController(frame);
+  if (keypadPacketBlocked_) {
+    stopMove();
+    proxy.sendToController(frame);
+  } else if (moveRequested_) {
+    // This packet has already passed through. It also cancels a remote
+    // request that was waiting for the current keypad packet to finish.
+    moveRequested_ = false;
+  }
 }
 
 void DeskController::onControllerFrame(const Frame& frame, uint32_t now) {

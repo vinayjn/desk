@@ -11,6 +11,8 @@
 #define ARDUINO_USB_CDC_ON_BOOT 1
 #define SERIAL_8N1 0
 
+using String = std::string;
+
 extern uint32_t fakeNow;
 inline uint32_t millis() { return fakeNow; }
 
