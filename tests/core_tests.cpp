@@ -95,10 +95,69 @@ static void testHeightState() {
   assert(query.kind() == Frame::Kind::Query);
 }
 
+static void testMovement() {
+  using Action = DeskState::Action;
+  using Status = DeskState::Status;
+  DeskState state;
+  assert(state.startMove(100, 0));
+  assert(state.tick(0) == Action::None);
+  state.updateHeight(90, 10);
+  assert(state.tick(10) == Action::Up);
+  assert(state.tick(109) == Action::None);
+  assert(state.tick(110) == Action::Up);
+  state.updateHeight(101, 120);
+  assert(state.tick(120) == Action::Idle);
+  assert(state.status() == Status::Idle);
+  assert(state.tick(130) == Action::None);
+
+  assert(state.startMove(90, 200));
+  assert(state.tick(200) == Action::None);
+  state.updateHeight(100, 201);
+  assert(state.tick(201) == Action::Down);
+  state.updateHeight(89, 220);
+  assert(state.tick(220) == Action::Idle);
+
+  assert(state.startMove(90, 300));
+  state.updateHeight(90, 301);
+  assert(state.tick(301) == Action::Idle);
+  assert(!state.startMove(119, 400));
+  assert(state.status() == Status::Error);
+  assert(state.tick(400) == Action::None);
+
+  assert(state.startMove(100, 500));
+  assert(state.tick(1499) == Action::None);
+  assert(state.tick(1500) == Action::Idle);
+  assert(state.status() == Status::Error);
+
+  assert(state.startMove(100, 2000));
+  state.updateHeight(90, 2001);
+  assert(state.tick(2001) == Action::Up);
+  assert(state.tick(3001) == Action::Idle);
+  assert(state.status() == Status::Error);
+
+  assert(state.startMove(100, 4000));
+  for (uint32_t now = 4001; now < 14000; now += 100) {
+    state.updateHeight(90, now);
+    assert(state.tick(now) == Action::Up);
+  }
+  state.updateHeight(90, 14000);
+  assert(state.tick(14000) == Action::Idle);
+  assert(state.status() == Status::Error);
+
+  assert(state.startMove(100, UINT32_MAX - 50));
+  state.updateHeight(90, UINT32_MAX - 40);
+  assert(state.tick(UINT32_MAX - 40) == Action::Up);
+  assert(state.tick(60) == Action::Up);
+  state.cancelMove();
+  assert(state.status() == Status::Idle);
+  assert(state.tick(70) == Action::None);
+}
+
 int main() {
   testFrames();
   testStreamParsing();
   testProtocol();
   testHeightState();
-  puts("Frame, stream, protocol and height tests passed");
+  testMovement();
+  puts("Frame, stream, protocol, height and movement tests passed");
 }

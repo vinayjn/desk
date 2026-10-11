@@ -20,6 +20,9 @@ public:
   int decodeHeight() const;
   static Frame keypadCommand(uint8_t command);
   static Frame queryCommand() { return keypadCommand(0x01); }
+  static Frame idleCommand() { return keypadCommand(0x00); }
+  static Frame upCommand() { return keypadCommand(0x20); }
+  static Frame downCommand() { return keypadCommand(0x40); }
   const char* label() const;
   bool operator==(const Frame& other) const { return bytes_ == other.bytes_; }
 

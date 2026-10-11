@@ -22,4 +22,7 @@ constexpr bool LogIdleFrames = false;
 constexpr int MinHeight = 72;
 constexpr int MaxHeight = 118;
 constexpr uint32_t StartupQueryDelayMs = 100;
+constexpr uint32_t MoveCommandIntervalMs = 100;
+constexpr uint32_t MoveTimeoutMs = 10000;
+constexpr uint32_t HeightTimeoutMs = 1000;
 }

@@ -9,6 +9,8 @@ class DeskController {
 public:
   void begin();
   void loop();
+  void requestMove(int target);
+  void stopMove();
 
 private:
   SerialProxy proxy;
@@ -18,6 +20,16 @@ private:
   DeskState state;
   bool queryRequested_ = true;
   uint32_t startedAt_ = 0;
+  bool moveRequested_ = false;
+  int requestedTarget_ = 0;
+  bool keypadPacketBlocked_ = false;
+  char serialCommand_[16]{};
+  size_t serialCommandLength_ = 0;
+  bool serialCommandOverflow_ = false;
+  DeskState::Status lastReportedStatus_ = DeskState::Status::Idle;
 
+  void onKeypadFrame(const Frame& frame);
   void onControllerFrame(const Frame& frame, uint32_t now);
+  void readSerialCommands();
+  void updateMovement(uint32_t now);
 };
