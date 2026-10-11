@@ -18,6 +18,8 @@ public:
   bool isValid() const;
   bool isIdle() const;
   int decodeHeight() const;
+  static Frame keypadCommand(uint8_t command);
+  static Frame queryCommand() { return keypadCommand(0x01); }
   const char* label() const;
   bool operator==(const Frame& other) const { return bytes_ == other.bytes_; }
 

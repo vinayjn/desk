@@ -18,4 +18,7 @@ void SerialProxy::begin() {
 int SerialProxy::readKeypad() { return keypad.read(); }
 int SerialProxy::readController() { return controller.read(); }
 void SerialProxy::sendToController(uint8_t byte) { controller.write(byte); }
+void SerialProxy::sendToController(const Frame& frame) {
+  controller.write(frame.bytes().data(), frame.bytes().size());
+}
 void SerialProxy::sendToKeypad(uint8_t byte) { keypad.write(byte); }

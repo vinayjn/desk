@@ -44,6 +44,10 @@ int Frame::decodeHeight() const {
   return 100 * segmentToDigit(bytes_[1]) + 10 * segmentToDigit(bytes_[2]) + segmentToDigit(bytes_[3]);
 }
 
+Frame Frame::keypadCommand(uint8_t command) {
+  return Frame(Bytes{{Config::KeypadHeader, 0, command, uint8_t(0xFF - command), 0xFF}});
+}
+
 const char* Frame::label() const {
   if (!isValid()) {
     if (source() == Source::Keypad) return "KEY:INVALID";

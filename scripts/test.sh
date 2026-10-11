@@ -9,5 +9,6 @@ trap 'rm -rf "$test_dir"' EXIT
   -fsanitize=address,undefined -fno-omit-frame-pointer \
   -I "$project_root" "$project_root/tests/core_tests.cpp" \
   "$project_root/Frame.cpp" "$project_root/FrameBuilder.cpp" \
+  "$project_root/DeskState.cpp" \
   -o "$test_dir/core_tests"
 "$test_dir/core_tests"

@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include "FrameBuilder.h"
+#include "DeskState.h"
 
 static void testFrames() {
   const Frame up(Frame::Bytes{{0xA5, 0, 0x20, 0xDF, 0xFF}});
@@ -78,9 +79,26 @@ static void testProtocol() {
   assert(result.kind() == Kind::Down);
 }
 
+static void testHeightState() {
+  DeskState state;
+  assert(state.currentHeight() == -1);
+  assert(!state.updateHeight(0, 0));
+  assert(state.currentHeight() == -1);
+  assert(state.updateHeight(72, 10));
+  assert(!state.updateHeight(72, 20));
+  assert(!state.updateHeight(119, 30));
+  assert(state.currentHeight() == 72);
+  assert(state.updateHeight(118, 40));
+  const Frame query = Frame::queryCommand();
+  assert(query.bytes() == (Frame::Bytes{{0xA5, 0, 1, 0xFE, 0xFF}}));
+  assert(query.isValid());
+  assert(query.kind() == Frame::Kind::Query);
+}
+
 int main() {
   testFrames();
   testStreamParsing();
   testProtocol();
-  puts("Frame, stream and protocol tests passed");
+  testHeightState();
+  puts("Frame, stream, protocol and height tests passed");
 }

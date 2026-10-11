@@ -19,4 +19,7 @@ constexpr uint32_t FrameTimeoutMs = 100;
 constexpr bool LogKeypadFrames = true;
 constexpr bool LogControllerFrames = true;
 constexpr bool LogIdleFrames = false;
+constexpr int MinHeight = 72;
+constexpr int MaxHeight = 118;
+constexpr uint32_t StartupQueryDelayMs = 100;
 }
