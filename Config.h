@@ -7,6 +7,7 @@ namespace Config {
 constexpr uint32_t DebugBaud = 115200;
 constexpr uint32_t DeskBaud = 9600;
 
+// RX/TX are named from the ESP32's perspective.
 constexpr int KeypadRxPin = 1;
 constexpr int KeypadTxPin = 3;
 constexpr int ControllerRxPin = 4;
