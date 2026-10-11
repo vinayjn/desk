@@ -1,6 +1,11 @@
 import SwiftUI
 import Combine
 
+enum Automation: String, CaseIterable {
+    case calendar
+    case clock = "60.arrow.trianglehead.clockwise"
+}
+
 enum DeskPreset: Double, CaseIterable {
     case sitting = 75
     case standing = 110
@@ -13,29 +18,8 @@ enum DeskPreset: Double, CaseIterable {
     }
 }
 
-@MainActor
-class ContentViewModel: ObservableObject {
-    @Published var currentHeight: Double = 0
-    @Published var isSliderDragging: Bool = false
-    let range = Double(72)...Double(118)
-    init() {
-        currentHeight = range.lowerBound
-    }
-
-    func setPreset(_ preset: DeskPreset) {
-        currentHeight = preset.rawValue
-        onDragEnded(value: preset.rawValue)
-    }
-
-    func onDragEnded(value: Double) {
-        print("Drag ended with final value: \(value)")
-
-    }
-}
-
 struct ContentView: View {
-    @EnvironmentObject var bluetoothManager: BluetoothManager
-    @StateObject private var viewModel = ContentViewModel()
+    @ObservedObject var viewModel: ContentViewModel
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismiss) private var dismiss
 
@@ -45,10 +29,11 @@ struct ContentView: View {
                 HStack {
                     Text("Desk Height")
                     Spacer()
-                    Text("\(Int(viewModel.currentHeight))")
+                    Text(viewModel.currentHeight.map { "\($0) cm" } ?? "—")
                 }
+                .fontWeight(.medium)
                 Slider(
-                    value: $viewModel.currentHeight,
+                    value: $viewModel.selectedHeight,
                     in: viewModel.range,
 
                     label: {
@@ -61,17 +46,19 @@ struct ContentView: View {
                         Text("\(Int(viewModel.range.upperBound))")
                     },
                     onEditingChanged: { isEditing in
-                        viewModel.isSliderDragging = isEditing
-                        if !isEditing {
-
-                            viewModel.onDragEnded(value: viewModel.currentHeight)
-                        }
+                        viewModel.sliderEditingChanged(isEditing)
                     }
                 )
+                .accessibilityLabel("Target desk height")
+                .accessibilityValue("\(Int(viewModel.selectedHeight.rounded())) centimeters")
+                Text("Target: \(Int(viewModel.selectedHeight.rounded())) cm")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 VStack {
                     HStack {
                         Text("Presets")
+                            .fontWeight(.medium)
                         Spacer()
                     }
 
@@ -80,7 +67,7 @@ struct ContentView: View {
                             Button {
                                 viewModel.setPreset(preset)
                             } label: {
-                                let isSelected = Int(viewModel.currentHeight) == Int(preset.rawValue)
+                                let isSelected = viewModel.currentHeight == Int(preset.rawValue)
                                 Image(preset.imageName)
                                     .renderingMode(.template)
                                     .resizable()
@@ -94,25 +81,62 @@ struct ContentView: View {
                                     )
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel(preset == .sitting ? "Sitting height" : "Standing height")
                         }
                     }
                 }
-                .onChange(of: viewModel.currentHeight, { _, newValue in
-                    let roundedValue = round(newValue)
-                    if viewModel.currentHeight != roundedValue {
-                        viewModel.currentHeight = roundedValue
+            }
+            .disabled(!viewModel.canMove)
+
+            Text(viewModel.statusMessage)
+                .font(.caption)
+                .foregroundStyle(viewModel.deskState == .error ? .red : .secondary)
+            if let error = viewModel.errorMessage {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+            VStack {
+                HStack {
+                    Text("Schedule")
+                        .fontWeight(.medium)
+                    Spacer()
+                }
+
+                HStack(alignment: .center) {
+                    ForEach(Automation.allCases, id: \.self) { automation in
+                        Button {
+                            viewModel.selectedAutomation = automation
+                        } label: {
+                            let isSelected = viewModel.selectedAutomation == automation
+                            Image(systemName: automation.rawValue)
+                                .renderingMode(.template)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 36, height: 36)
+                                .foregroundStyle(isSelected ? Color.white : Color.primary)
+                                .padding(8)
+                                .background(
+                                    Circle()
+                                        .fill(isSelected ? Color.accentColor : Color.clear)
+                                )
+                        }
+                        .buttonStyle(.plain)
                     }
-                })
+                }
             }
 
             Divider()
 
-            HStack {
-                Image(bluetoothManager.connectedDevice == nil ? "no-bluetooth" : "bluetooth")
+            HStack(alignment: .center) {
+                Image(viewModel.isConnected ? "bluetooth" : "no-bluetooth")
                     .renderingMode(.template)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 20, height: 20)
+                    .frame(width: 18, height: 18)
 
                 Spacer()
                 Button {
@@ -129,18 +153,11 @@ struct ContentView: View {
                 .keyboardShortcut("q")
             }
             .buttonStyle(.borderless)
-
         }
+        .frame(width: 280)
         .padding()
+        .onAppear {
+            viewModel.startScanning()
+        }
     }
-}
-
-#Preview("Light") {
-    ContentView()
-        .colorScheme(.light)
-}
-
-#Preview("Dark") {
-    ContentView()
-        .colorScheme(.dark)
 }

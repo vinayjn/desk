@@ -1,208 +1,267 @@
 import Combine
 import CoreBluetooth
 
-class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeripheralDelegate {
-    @Published var centralManager: CBCentralManager!
-    @Published var isScanning = false
-    @Published var discoveredDevices: [CBPeripheral] = []
-    @Published var connectedDevice: CBPeripheral?
-    @Published var connectionStatus = "Initializing..."
-    @Published var receivedData = ""
+@MainActor
+final class BluetoothManager: NSObject, ObservableObject, DeskTransport, CBCentralManagerDelegate, CBPeripheralDelegate {
+    @Published private(set) var isScanning = false
+    @Published private(set) var deskPeripheral: CBPeripheral?
+    @Published private(set) var isReady = false
+    @Published private(set) var connectionMessage = "Initializing Bluetooth…"
+    @Published private(set) var errorMessage: String?
 
-    @Published var serviceCharacteristics = [CBService: [CBCharacteristic]]()
-    @Published var selectedService: CBService?
-    @Published var selectedCharacteristic: CBCharacteristic?
+    var readiness: AnyPublisher<Bool, Never> { $isReady.eraseToAnyPublisher() }
+    var connectionMessages: AnyPublisher<String, Never> { $connectionMessage.eraseToAnyPublisher() }
+    var errors: AnyPublisher<String?, Never> { $errorMessage.eraseToAnyPublisher() }
+    var dataCallback: (@MainActor (Data, Bool) -> Void)?
 
-    var services: [CBService] {
-        serviceCharacteristics.keys.sorted { $0.uuid.uuidString < $1.uuid.uuidString }
-    }
+    private var centralManager: CBCentralManager?
+    private var characteristics: [CBUUID: CBCharacteristic] = [:]
+    private var subscribed = Set<CBUUID>()
+    private var receivedHeight = false
+    private var receivedStatus = false
+    private var shouldReconnect = true
+    private var isDisconnecting = false
+    private var reconnectTask: Task<Void, Never>?
+    private var connectionTimeoutTask: Task<Void, Never>?
 
-    var characteristics: [CBCharacteristic] {
-        if let selectedService {
-            return serviceCharacteristics[selectedService] ?? []
-        }
-        return []
-    }
+    private let serviceID = CBUUID(string: Constants.DESK_SERVICE_ID)
+    private let heightID = CBUUID(string: Constants.DESK_GET_HEIGHT_CHAR_ID)
+    private let targetID = CBUUID(string: Constants.DESK_SET_HEIGHT_CHAR_ID)
+    private let statusID = CBUUID(string: Constants.DESK_GET_STATUS_CHAR_ID)
 
     override init() {
         super.init()
+        // A nil queue delivers Core Bluetooth delegate events on the main queue.
         centralManager = CBCentralManager(delegate: self, queue: nil)
     }
 
-    func encodeHeight(_ heightInCm: Int) -> Data? {
-        guard heightInCm >= 72 && heightInCm <= 118 else {
-            print("Error: Height \(heightInCm) is out of valid range (72-118 cm)")
-            return nil
-        }
-
-        let byte = UInt8(heightInCm)
-        return Data([byte])
-    }
-
-    func decodeHeight(from data: Data) -> Int? {
-        guard let byte = data.first else {
-            print("Error: No data received")
-            return nil
-        }
-
-        let height = Int(byte)
-
-        guard height >= 72 && height <= 118 else {
-            print("Warning: Received height \(height) is out of expected range")
-            return nil
-        }
-
-        return height
-    }
-
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        DispatchQueue.main.async {
+        guard central.state == .poweredOn else {
+            reconnectTask?.cancel()
+            connectionTimeoutTask?.cancel()
+            isScanning = false
+            clearConnection()
             switch central.state {
-            case .poweredOn:
-                self.connectionStatus = "Ready to scan"
-            case .poweredOff:
-                self.connectionStatus = "Turn on Bluetooth in Settings"
-            case .unauthorized:
-                self.connectionStatus = "Allow Bluetooth access in Settings"
-            case .unsupported:
-                self.connectionStatus = "Device doesn't support Bluetooth"
-            case .resetting:
-                self.connectionStatus = "Bluetooth is resetting..."
-            case .unknown:
-                self.connectionStatus = "Bluetooth state unknown"
-            @unknown default:
-                self.connectionStatus = "Unknown Bluetooth state"
+            case .poweredOff: connectionMessage = "Turn on Bluetooth to connect to the desk."
+            case .unauthorized: connectionMessage = "Allow Desky Bluetooth access in System Settings."
+            case .unsupported: connectionMessage = "Bluetooth is unavailable on this Mac."
+            case .resetting: connectionMessage = "Bluetooth is restarting…"
+            default: connectionMessage = "Waiting for Bluetooth…"
             }
-
-            print("Bluetooth state changed to: \(central.state.rawValue)")
+            return
         }
+        if shouldReconnect { startScanning() }
     }
 
     func startScanning() {
-        guard centralManager.state == .poweredOn else {
-            connectionStatus = "Bluetooth not ready"
-            return
-        }
-
-        discoveredDevices.removeAll()
+        shouldReconnect = true
+        guard let centralManager, centralManager.state == .poweredOn,
+              deskPeripheral == nil, !isScanning else { return }
+        reconnectTask?.cancel()
+        connectionMessage = "Looking for Standing Desk…"
         isScanning = true
-        connectionStatus = "Scanning..."
-
-        centralManager.scanForPeripherals(withServices: nil, options: [
-            CBCentralManagerScanOptionSolicitedServiceUUIDsKey: []
-        ])
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
-            if self.isScanning {
-                self.stopScanning()
-            }
-        }
+        centralManager.scanForPeripherals(withServices: [serviceID], options: nil)
     }
 
-    func stopScanning() {
-        centralManager.stopScan()
+    private func stopScanning() {
+        if centralManager?.state == .poweredOn { centralManager?.stopScan() }
         isScanning = false
-        let deviceCount = discoveredDevices.count
-        connectionStatus = deviceCount == 0 ? "No devices found" : "Found \(deviceCount) device(s)"
-        print("Scan stopped. Total devices found: \(deviceCount)")
     }
 
-    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
-        if !discoveredDevices.contains(where: { $0.identifier == peripheral.identifier }) {
-            DispatchQueue.main.async {
-                self.discoveredDevices.append(peripheral)
-                if self.isScanning {
-                    self.connectionStatus = "Found \(self.discoveredDevices.count) device(s)..."
-                }
-            }
-        }
-    }
-
-    func connect(to peripheral: CBPeripheral) {
-        centralManager.connect(peripheral, options: nil)
-        connectionStatus = "Connecting..."
+    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral,
+                        advertisementData: [String: Any], rssi RSSI: NSNumber) {
+        guard isScanning, deskPeripheral == nil else { return }
+        stopScanning()
+        deskPeripheral = peripheral
+        connectionMessage = "Connecting to \(peripheral.name ?? "Standing Desk")…"
+        startConnectionTimeout(for: peripheral)
+        central.connect(peripheral, options: nil)
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        connectedDevice = peripheral
+        guard peripheral === deskPeripheral, !isDisconnecting else { return }
         peripheral.delegate = self
-        connectionStatus = "Connected to \(peripheral.name ?? "Unknown")"
-        self.stopScanning()
-
-        serviceCharacteristics = [:]
-        peripheral.discoverServices(nil)
+        resetCharacteristics()
+        connectionMessage = "Reading desk controls…"
+        peripheral.discoverServices([serviceID])
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
-        connectionStatus = "Failed to connect"
+        guard peripheral === deskPeripheral else { return }
+        errorMessage = error?.localizedDescription ?? "Could not connect to the desk."
+        clearConnection()
+        reconnect()
+    }
+
+    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        guard peripheral === deskPeripheral else { return }
+        if let error { errorMessage = error.localizedDescription }
+        clearConnection()
+        reconnect()
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-        guard let services = peripheral.services else {
+        guard peripheral === deskPeripheral, !isDisconnecting else { return }
+        guard error == nil, let service = peripheral.services?.first(where: { $0.uuid == serviceID }) else {
+            failConnection(error?.localizedDescription ?? "The desk Bluetooth service was not found.")
             return
         }
-
-        print("Discovered \(services.count) services for \(peripheral.name ?? "Unknown"):")
-        for service in services {
-            serviceCharacteristics[service] = []
-            print("  Service UUID: \(service.uuid)")
-            peripheral.discoverCharacteristics(nil, for: service)
-        }
+        peripheral.discoverCharacteristics([heightID, targetID, statusID], for: service)
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
-        guard let characteristics = service.characteristics else {
-            print("No characteristics found for service \(service.uuid)")
+        guard peripheral === deskPeripheral, !isDisconnecting, service.uuid == serviceID else { return }
+        guard error == nil else {
+            failConnection(error?.localizedDescription ?? "Could not read the desk controls.")
             return
         }
-
-        print("Discovered \(characteristics.count) characteristics for service \(service.uuid):")
-
-        serviceCharacteristics[service] = characteristics
-
-        for characteristic in characteristics {
-            if characteristic.properties.contains(.notify) {
-                peripheral.setNotifyValue(true, for: characteristic)
-            }
+        for characteristic in service.characteristics ?? [] {
+            characteristics[characteristic.uuid] = characteristic
         }
-
-        DispatchQueue.main.async {
-            self.connectionStatus = "Connected"
-            self.selectedService = service
-            self.selectedCharacteristic = characteristics.first
+        guard let height = characteristics[heightID], let status = characteristics[statusID],
+              let target = characteristics[targetID], target.properties.contains(.write),
+              [height, status].allSatisfy({ $0.properties.contains([.read, .notify]) }) else {
+            failConnection("The desk is missing the required Bluetooth controls.")
+            return
         }
+        for characteristic in [height, status] {
+            peripheral.setNotifyValue(true, for: characteristic)
+        }
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
+        guard peripheral === deskPeripheral, !isDisconnecting, characteristic === characteristics[characteristic.uuid] else { return }
+        guard error == nil, characteristic.isNotifying else {
+            failConnection(error?.localizedDescription ?? "Could not subscribe to desk updates.")
+            return
+        }
+        subscribed.insert(characteristic.uuid)
+        // Connection notifications can precede discovery: subscribe, then read
+        // both values so a stationary desk also supplies an initial snapshot.
+        peripheral.readValue(for: characteristic)
+        updateReadiness()
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-        if let data = characteristic.value {
-            if let height = decodeHeight(from: data) {
-                DispatchQueue.main.async {
-                    self.receivedData += "\(height)"
-                }
-            }
-        }
-    }
-
-    func sendCommand(_ command: String) {
-        guard let device = connectedDevice,
-              let height = Int(command),
-              let characteristic = selectedCharacteristic,
-              let encodedData = encodeHeight(height) else {
-            receivedData += "Error: Cannot send \(command) - not connected\n"
+        guard peripheral === deskPeripheral, !isDisconnecting, characteristic === characteristics[characteristic.uuid] else { return }
+        guard error == nil, let data = characteristic.value else {
+            failConnection(error?.localizedDescription ?? "Could not read a desk update.")
             return
         }
+        if characteristic.uuid == heightID {
+            guard DeskProtocol.decodeHeight(data) != nil else {
+                failConnection("The desk sent an invalid height.")
+                return
+            }
+            receivedHeight = true
+            dataCallback?(data, true)
+        } else if characteristic.uuid == statusID {
+            guard DeskProtocol.decodeStatus(data) != nil else {
+                failConnection("The desk sent an invalid status.")
+                return
+            }
+            receivedStatus = true
+            dataCallback?(data, false)
+        }
+        updateReadiness()
+    }
 
-        Task {
-            device.writeValue(encodedData, for: characteristic, type: .withResponse)
-            receivedData += "Sent: \(command)\n"
+    func peripheral(_ peripheral: CBPeripheral, didModifyServices invalidatedServices: [CBService]) {
+        guard peripheral === deskPeripheral, !isDisconnecting, invalidatedServices.contains(where: { $0.uuid == serviceID }) else { return }
+        resetCharacteristics()
+        connectionMessage = "Refreshing desk controls…"
+        startConnectionTimeout(for: peripheral)
+        peripheral.discoverServices([serviceID])
+    }
+
+    @discardableResult
+    func sendHeightData(_ data: Data) -> Bool {
+        guard data.count == 1, let byte = data.first, DeskProtocol.heightRange.contains(Int(byte)) else {
+            errorMessage = "Choose a height between 72 and 118 cm."
+            return false
+        }
+        guard isReady, let peripheral = deskPeripheral, peripheral.state == .connected,
+              let characteristic = characteristics[targetID] else {
+            errorMessage = "Wait for the desk to connect before moving it."
+            return false
+        }
+        errorMessage = nil
+        peripheral.writeValue(data, for: characteristic, type: .withResponse)
+        return true
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
+        guard peripheral === deskPeripheral, !isDisconnecting, characteristic === characteristics[targetID] else { return }
+        if let error {
+            errorMessage = "Could not send the height: \(error.localizedDescription)"
+        } else if let status = characteristics[statusID] {
+            // An already satisfied target can remain IDLE without a notification.
+            peripheral.readValue(for: status)
         }
     }
 
     func disconnect() {
-        if let device = connectedDevice {
-            centralManager.cancelPeripheralConnection(device)
-            connectedDevice = nil
-            connectionStatus = "Disconnected"
+        shouldReconnect = false
+        reconnectTask?.cancel()
+        stopScanning()
+        if let peripheral = deskPeripheral { centralManager?.cancelPeripheralConnection(peripheral) }
+        clearConnection()
+        connectionMessage = "Disconnected"
+    }
+
+    private func updateReadiness() {
+        guard !isDisconnecting, !isReady, receivedHeight, receivedStatus,
+              subscribed.contains(heightID), subscribed.contains(statusID) else { return }
+        connectionTimeoutTask?.cancel()
+        errorMessage = nil
+        isReady = true
+        connectionMessage = "Connected to \(deskPeripheral?.name ?? "Standing Desk")"
+    }
+
+    private func resetCharacteristics() {
+        isReady = false
+        characteristics.removeAll()
+        subscribed.removeAll()
+        receivedHeight = false
+        receivedStatus = false
+    }
+
+    private func clearConnection() {
+        connectionTimeoutTask?.cancel()
+        deskPeripheral?.delegate = nil
+        deskPeripheral = nil
+        isDisconnecting = false
+        resetCharacteristics()
+    }
+
+    private func failConnection(_ message: String) {
+        connectionTimeoutTask?.cancel()
+        isDisconnecting = true
+        errorMessage = message
+        connectionMessage = message
+        isReady = false
+        if let peripheral = deskPeripheral { centralManager?.cancelPeripheralConnection(peripheral) }
+        // Retain the peripheral until cancellation completes, avoiding a second
+        // connection being started while the old one is still disconnecting.
+    }
+
+    private func reconnect() {
+        connectionMessage = "Desk disconnected. Reconnecting…"
+        guard shouldReconnect else { return }
+        reconnectTask?.cancel()
+        reconnectTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(2)) } catch { return }
+            self?.startScanning()
+        }
+    }
+
+    private func startConnectionTimeout(for peripheral: CBPeripheral) {
+        connectionTimeoutTask?.cancel()
+        let identifier = peripheral.identifier
+        connectionTimeoutTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(20)) } catch { return }
+            guard let self, self.deskPeripheral?.identifier == identifier, !self.isReady else { return }
+            self.failConnection("The desk connection timed out. Retrying…")
         }
     }
 }

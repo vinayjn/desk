@@ -10,9 +10,22 @@
 		FE98D8362E889A6100E7E6D9 /* Desky.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Desky.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		FE758DBB2EA7C3F400528C27 /* Exceptions for "Desky" folder in "Desky" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = FE98D8352E889A6100E7E6D9 /* Desky */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		FE98D8382E889A6100E7E6D9 /* Desky */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				FE758DBB2EA7C3F400528C27 /* Exceptions for "Desky" folder in "Desky" target */,
+			);
 			path = Desky;
 			sourceTree = "<group>";
 		};
@@ -269,6 +282,7 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Desky/Info.plist;
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "To connect to standing desk";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -313,6 +327,7 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Desky/Info.plist;
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "To connect to standing desk";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
