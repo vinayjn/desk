@@ -9,21 +9,15 @@ final class ContentViewModel: ObservableObject {
     @Published private(set) var isSliderDragging = false
     @Published private(set) var isConnected = false
     @Published private(set) var isAwaitingResponse = false
-    @Published private(set) var connectionMessage = "Initializing Bluetooth…"
     @Published private(set) var errorMessage: String?
     @Published var selectedAutomation: Automation?
 
     let range = Double(DeskProtocol.heightRange.lowerBound)...Double(DeskProtocol.heightRange.upperBound)
     var canMove: Bool { isConnected && deskState != .moving && !isAwaitingResponse }
 
-    var statusMessage: String {
-        if !isConnected { return connectionMessage }
-        if isAwaitingResponse { return "Waiting for the desk…" }
-        switch deskState {
-        case .idle: return "Connected"
-        case .moving: return "Moving…"
-        case .error: return "Desk stopped with an error. Choose a height to retry."
-        }
+    var displayedErrorMessage: String? {
+        if let errorMessage { return errorMessage }
+        return deskState == .error ? "Desk stopped with an error. Choose a height to retry." : nil
     }
 
     private let bluetoothManager: any DeskTransport
@@ -44,9 +38,6 @@ final class ContentViewModel: ObservableObject {
                     self.isSliderDragging = false
                 }
             }.store(in: &cancellables)
-        bluetoothManager.connectionMessages
-            .sink { [weak self] in self?.connectionMessage = $0 }
-            .store(in: &cancellables)
         bluetoothManager.errors
             .sink { [weak self] error in
                 self?.errorMessage = error
@@ -118,7 +109,7 @@ final class ContentViewModel: ObservableObject {
     }
 
     private func synchronizeSelection() {
-        if !isSliderDragging, !isAwaitingResponse, deskState != .moving, let currentHeight {
+        if !isSliderDragging, !isAwaitingResponse, let currentHeight {
             selectedHeight = Double(currentHeight)
         }
     }

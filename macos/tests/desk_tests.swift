@@ -85,11 +85,16 @@ struct DeskTests {
         expect(model.isAwaitingResponse, "An old IDLE read must not acknowledge an unmet target")
         desk.status("MOVING")
         expect(!model.isAwaitingResponse && !model.canMove, "Moving status completes acknowledgement and locks controls")
+        expect(model.selectedHeight == 90, "Slider resumes live height once movement starts")
         desk.height(98)
-        expect(model.selectedHeight == 100, "Keep target while moving")
+        expect(model.selectedHeight == 98 && model.currentHeight == 98, "Slider follows height while moving")
+        expect(!model.canMove, "Feedback must not reenable the slider during movement")
+        model.onDragEnded(value: 75)
+        expect(desk.writes.count == 1, "Disabled movement controls cannot send another target")
         desk.height(100)
         desk.status("IDLE")
         expect(model.canMove && model.currentHeight == 100, "Final IDLE restores controls")
+        expect(model.selectedHeight == 100, "Slider remains at final reported height")
 
         model.onDragEnded(value: 100)
         desk.status("IDLE")
@@ -98,6 +103,7 @@ struct DeskTests {
         expect(model.currentHeight == 100 && desk.writes.last == Data([110]), "Preset is a target, not measured height")
         desk.status("ERROR")
         expect(model.deskState == .error && model.canMove, "Persistent ERROR must allow a retry")
+        expect(model.displayedErrorMessage != nil, "Firmware errors remain visible without routine status labels")
         model.setPreset(.standing)
         expect(model.isAwaitingResponse, "Retry from ERROR sends a new command")
         desk.status("MOVING")
@@ -107,6 +113,7 @@ struct DeskTests {
         desk.rejectWrites = true
         model.setPreset(.sitting)
         expect(!model.isAwaitingResponse && model.errorMessage == "Write failed", "Failed write must be visible and release controls")
+        expect(model.displayedErrorMessage == "Write failed", "Display the actionable write failure once")
         expect(model.currentHeight == 110 && model.selectedHeight == 110, "Failed write keeps actual height")
         desk.rejectWrites = false
         model.setPreset(.sitting)

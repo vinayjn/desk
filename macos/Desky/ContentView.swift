@@ -29,13 +29,14 @@ struct ContentView: View {
                 HStack {
                     Text("Desk Height")
                     Spacer()
-                    Text(viewModel.currentHeight.map { "\($0) cm" } ?? "—")
+                    Text(viewModel.isSliderDragging
+                         ? "\(Int(viewModel.selectedHeight.rounded())) cm"
+                         : viewModel.currentHeight.map { "\($0) cm" } ?? "—")
                 }
                 .fontWeight(.medium)
                 Slider(
                     value: $viewModel.selectedHeight,
                     in: viewModel.range,
-
                     label: {
                         EmptyView()
                     },
@@ -49,11 +50,8 @@ struct ContentView: View {
                         viewModel.sliderEditingChanged(isEditing)
                     }
                 )
-                .accessibilityLabel("Target desk height")
+                .accessibilityLabel("Desk height")
                 .accessibilityValue("\(Int(viewModel.selectedHeight.rounded())) centimeters")
-                Text("Target: \(Int(viewModel.selectedHeight.rounded())) cm")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
 
                 VStack {
                     HStack {
@@ -88,10 +86,7 @@ struct ContentView: View {
             }
             .disabled(!viewModel.canMove)
 
-            Text(viewModel.statusMessage)
-                .font(.caption)
-                .foregroundStyle(viewModel.deskState == .error ? .red : .secondary)
-            if let error = viewModel.errorMessage {
+            if let error = viewModel.displayedErrorMessage {
                 Text(error)
                     .font(.caption)
                     .foregroundStyle(.red)
