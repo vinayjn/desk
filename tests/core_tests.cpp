@@ -122,27 +122,31 @@ static void testMovement() {
   assert(state.tick(301) == Action::Idle);
   assert(!state.startMove(119, 400));
   assert(state.status() == Status::Error);
+  assert(state.errorReason() == DeskState::ErrorReason::InvalidTarget);
   assert(state.tick(400) == Action::None);
 
   assert(state.startMove(100, 500));
   assert(state.tick(1499) == Action::None);
   assert(state.tick(1500) == Action::Idle);
   assert(state.status() == Status::Error);
+  assert(state.errorReason() == DeskState::ErrorReason::FeedbackTimeout);
 
   assert(state.startMove(100, 2000));
   state.updateHeight(90, 2001);
   assert(state.tick(2001) == Action::Up);
   assert(state.tick(3001) == Action::Idle);
   assert(state.status() == Status::Error);
+  assert(state.errorReason() == DeskState::ErrorReason::FeedbackTimeout);
 
   assert(state.startMove(100, 4000));
-  for (uint32_t now = 4001; now < 14000; now += 100) {
+  for (uint32_t now = 4001; now < 14001; now += 100) {
     state.updateHeight(90, now);
     assert(state.tick(now) == Action::Up);
   }
-  state.updateHeight(90, 14000);
-  assert(state.tick(14000) == Action::Idle);
+  state.updateHeight(90, 14001);
+  assert(state.tick(14001) == Action::Idle);
   assert(state.status() == Status::Error);
+  assert(state.errorReason() == DeskState::ErrorReason::NoProgress);
 
   assert(state.startMove(100, UINT32_MAX - 50));
   state.updateHeight(90, UINT32_MAX - 40);
@@ -150,7 +154,82 @@ static void testMovement() {
   assert(state.tick(60) == Action::Up);
   state.cancelMove();
   assert(state.status() == Status::Idle);
+  assert(state.errorReason() == DeskState::ErrorReason::None);
   assert(state.tick(70) == Action::None);
+}
+
+static void testLongMovement() {
+  using Action = DeskState::Action;
+  using Status = DeskState::Status;
+
+  const int starts[] = {103, 75, 118, 72};
+  const int targets[] = {75, 103, 72, 118};
+  for (unsigned move = 0; move < 4; ++move) {
+    DeskState state;
+    const int direction = targets[move] > starts[move] ? 1 : -1;
+    const Action action = direction > 0 ? Action::Up : Action::Down;
+    assert(state.startMove(targets[move], 0));
+    for (uint32_t now = 100; ; now += 100) {
+      const int value = starts[move] + direction * int((now - 100) / 600);
+      state.updateHeight(value, now);
+      if (value == targets[move]) {
+        assert(now > 10000);
+        assert(state.tick(now) == Action::Idle);
+        assert(state.status() == Status::Idle);
+        break;
+      }
+      assert(state.tick(now) == action);
+      assert(state.status() == Status::Moving);
+    }
+  }
+}
+
+static void testMovementLimits() {
+  using Action = DeskState::Action;
+  using Status = DeskState::Status;
+  using Error = DeskState::ErrorReason;
+  DeskState state;
+  assert(state.startMove(75, 0));
+  state.updateHeight(103, 100);
+  assert(state.tick(100) == Action::Down);
+  state.updateHeight(102, 5000);
+  assert(state.tick(5000) == Action::Down);
+  for (uint32_t now = 5100; now < 15000; now += 100) {
+    state.updateHeight(now % 200 == 0 ? 102 : 103, now);
+    state.tick(now);
+    assert(state.status() == Status::Moving);
+  }
+  state.updateHeight(102, 15000);
+  assert(state.tick(15000) == Action::Idle);
+  assert(state.errorReason() == Error::NoProgress);
+  assert(state.startMove(100, 16000));
+  assert(state.errorReason() == Error::None);
+  state.updateHeight(100, 16001);
+  assert(state.tick(16001) == Action::Idle);
+
+  const uint32_t starts[] = {0, UINT32_MAX - 1000};
+  for (uint32_t started : starts) {
+    DeskState slow;
+    assert(slow.startMove(118, started));
+    for (uint32_t elapsed = 100; elapsed < 60000; elapsed += 100) {
+      const uint32_t now = started + elapsed;
+      slow.updateHeight(72 + int(elapsed / 2000), now);
+      assert(slow.tick(now) == Action::Up);
+    }
+    slow.updateHeight(102, started + 60000);
+    assert(slow.tick(started + 60000) == Action::Idle);
+    assert(slow.errorReason() == Error::MoveTimeout);
+  }
+
+  DeskState boundary;
+  assert(boundary.startMove(118, 0));
+  for (uint32_t elapsed = 100; elapsed < 60000; elapsed += 100) {
+    boundary.updateHeight(72 + int(elapsed * 46 / 60000), elapsed);
+    assert(boundary.tick(elapsed) == Action::Up);
+  }
+  boundary.updateHeight(118, 60000);
+  assert(boundary.tick(60000) == Action::Idle);
+  assert(boundary.status() == Status::Idle);
 }
 
 int main() {
@@ -159,5 +238,7 @@ int main() {
   testProtocol();
   testHeightState();
   testMovement();
+  testLongMovement();
+  testMovementLimits();
   puts("Frame, stream, protocol, height and movement tests passed");
 }

@@ -63,7 +63,14 @@ void DeskController::loop() {
   updateMovement(millis());
   if (state.status() != lastReportedStatus_) {
     lastReportedStatus_ = state.status();
-    if (Serial) Serial.printf("Status: %s\n", DeskState::statusName(state.status()));
+    if (Serial) {
+      if (state.status() == DeskState::Status::Error) {
+        Serial.printf("Status: ERROR (%s), height: %d cm\n",
+          DeskState::errorReasonName(state.errorReason()), state.currentHeight());
+      } else {
+        Serial.printf("Status: %s\n", DeskState::statusName(state.status()));
+      }
+    }
   }
   ble.publish(state.currentHeight(), state.status());
 }

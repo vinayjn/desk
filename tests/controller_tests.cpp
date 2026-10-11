@@ -224,6 +224,73 @@ static void testBluetooth() {
   assert(fakeAdvertising.starts == 2);
 }
 
+static void testLongBluetoothMove() {
+  reset();
+  DeskController desk;
+  desk.begin();
+  fakeNow = 100;
+  desk.loop();
+  auto* current = fakeBleServer.service.find(Config::BleHeightUuid);
+  auto* target = fakeBleServer.service.find(Config::BleTargetUuid);
+  auto* status = fakeBleServer.service.find(Config::BleStatusUuid);
+  fakeBleServer.connect();
+  desk.loop();
+  feed(0, height(103));
+  desk.loop();
+  target->writeFromClient(String(1, char(75)));
+  desk.loop();
+  assert(status->getValue() == "MOVING");
+  feed(0, height(103));
+  desk.loop();
+  Serial.output.clear();
+  for (uint32_t elapsed = 100; ; elapsed += 100) {
+    fakeNow = 100 + elapsed;
+    const int value = 103 - int(elapsed / 550);
+    fakeUarts[0].output.clear();
+    feed(0, height(value));
+    desk.loop();
+    assert(current->getValue() == String(1, char(value)));
+    if (value == 75) {
+      assert(status->getValue() == "IDLE");
+      assert(fakeUarts[0].output == bytes(Frame::idleCommand()));
+      break;
+    }
+    assert(status->getValue() == "MOVING");
+    assert(fakeUarts[0].output == bytes(Frame::downCommand()));
+    if (elapsed == 10000) assert(value == 85);
+  }
+  assert(Serial.output.find("ERROR") == std::string::npos);
+
+  target->writeFromClient(String(1, char(103)));
+  desk.loop();
+  feed(0, height(75));
+  desk.loop();
+  const uint32_t stalledAt = fakeNow;
+  for (uint32_t elapsed = 100; elapsed < 10000; elapsed += 100) {
+    fakeNow = stalledAt + elapsed;
+    feed(0, height(75));
+    desk.loop();
+    assert(status->getValue() == "MOVING");
+  }
+  fakeNow = stalledAt + 10000;
+  fakeUarts[0].output.clear();
+  feed(0, height(75));
+  desk.loop();
+  assert(status->getValue() == "ERROR");
+  assert(fakeUarts[0].output == bytes(Frame::idleCommand()));
+  assert(Serial.output.find("Status: ERROR (no progress toward target), height: 75 cm") != std::string::npos);
+
+  target->writeFromClient(String(1, char(76)));
+  desk.loop();
+  feed(0, height(75));
+  desk.loop();
+  assert(status->getValue() == "MOVING");
+  fakeNow += 100;
+  feed(0, height(76));
+  desk.loop();
+  assert(status->getValue() == "IDLE");
+}
+
 int main() {
   testRelayAndLogging();
   testInjectionBoundary();
@@ -232,5 +299,6 @@ int main() {
   testSerialInput();
   testPendingTargetCancellation();
   testBluetooth();
+  testLongBluetoothMove();
   puts("Controller routing, logging, cancellation, USB and Bluetooth tests passed");
 }
